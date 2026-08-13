@@ -12,6 +12,9 @@ const LANE_WIDTH = ROAD_WIDTH / LANE_COUNT;
 const CAR_WIDTH = 56;
 const CAR_HEIGHT = 90;
 const JUMP_UNLOCK_SCORE = 2000;
+const SPEED_BOOST_SCORE = 1000;
+const SPEED_BOOST_AMOUNT = 4;
+const SPEED_BOOST_NOTICE_DURATION = 180;
 
 const colors = {
   gray: "#3c3c3c",
@@ -160,15 +163,20 @@ class Game {
     this.score = 0;
     this.gameOver = false;
     this.paused = false;
+    this.speedBoostNoticeTimer = 0;
+    this.speedBoostTriggered = false;
   }
 
   difficultySpeed() {
-    return this.baseSpeed + Math.floor(this.score / 300);
+    let speed = this.baseSpeed + Math.floor(this.score / 300);
+    if (this.score >= SPEED_BOOST_SCORE) speed += SPEED_BOOST_AMOUNT;
+    return speed;
   }
 
   spawnEnemy() {
     this.spawnTimer += 1;
-    const interval = Math.max(28, this.spawnInterval - Math.floor(this.score / 40));
+    let interval = Math.max(28, this.spawnInterval - Math.floor(this.score / 40));
+    if (this.score >= SPEED_BOOST_SCORE) interval = Math.max(18, interval - 10);
     if (this.spawnTimer >= interval) {
       this.spawnTimer = 0;
       this.enemies.push(new Enemy(this.difficultySpeed()));
@@ -183,6 +191,11 @@ class Game {
     this.enemies.forEach((enemy) => enemy.update());
     this.enemies = this.enemies.filter((enemy) => enemy.y < HEIGHT + 100);
     this.score += 1;
+    if (this.score >= SPEED_BOOST_SCORE && !this.speedBoostTriggered) {
+      this.speedBoostTriggered = true;
+      this.speedBoostNoticeTimer = SPEED_BOOST_NOTICE_DURATION;
+    }
+    if (this.speedBoostNoticeTimer > 0) this.speedBoostNoticeTimer -= 1;
 
     if (!this.player.isAirborne()) {
       const playerRect = this.player.rect();
@@ -197,6 +210,7 @@ class Game {
     this.player.draw();
     this.enemies.forEach((enemy) => enemy.draw());
     drawHud(this);
+    if (this.speedBoostNoticeTimer > 0) drawBoostNotice(this.speedBoostNoticeTimer);
     if (this.paused) drawCenterText("PAUSED", "Press P to resume");
     if (this.gameOver) drawCenterText("GAME OVER", "Press R or tap Jump");
   }
@@ -263,9 +277,26 @@ function drawHud(game) {
   ctx.fillText(`Score: ${game.score}`, 14, 38);
   ctx.font = "20px Arial";
   ctx.fillText(`Speed: ${game.difficultySpeed()}`, 14, 66);
+  let jumpY = 92;
+  if (game.score >= SPEED_BOOST_SCORE) {
+    ctx.fillStyle = colors.green;
+    ctx.fillText("Boost Mode: ON", 14, 92);
+    jumpY = 118;
+  }
   const jumpLabel = game.score < JUMP_UNLOCK_SCORE ? `Jump unlocks at ${JUMP_UNLOCK_SCORE}` : game.player.jumpCooldown === 0 ? "Jump: READY" : "Jump: WAIT";
   ctx.fillStyle = game.score >= JUMP_UNLOCK_SCORE && game.player.jumpCooldown === 0 ? colors.green : colors.yellow;
-  ctx.fillText(jumpLabel, 14, 92);
+  ctx.fillText(jumpLabel, 14, jumpY);
+}
+
+function drawBoostNotice(timer) {
+  ctx.textAlign = "center";
+  ctx.fillStyle = timer % 30 < 15 ? colors.green : colors.yellow;
+  ctx.font = "700 48px Arial";
+  ctx.fillText("SPEED BOOST!", WIDTH / 2, 145);
+  ctx.fillStyle = colors.white;
+  ctx.font = "20px Arial";
+  ctx.fillText("Traffic is faster after 1000", WIDTH / 2, 185);
+  ctx.textAlign = "left";
 }
 
 function drawCenterText(title, subtitle) {

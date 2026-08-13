@@ -47,11 +47,14 @@ TAIL_LIGHT = (185, 25, 35)
 ROAD_WIDTH = 540
 ROAD_LEFT = (WIDTH - ROAD_WIDTH) // 2
 ROAD_RIGHT = ROAD_LEFT + ROAD_WIDTH
-LANE_COUNT = 5
+LANE_COUNT = 3
 LANE_WIDTH = ROAD_WIDTH // LANE_COUNT
 
 CAR_WIDTH, CAR_HEIGHT = 56, 90
 JUMP_UNLOCK_SCORE = 2000
+SPEED_BOOST_SCORE = 1000
+SPEED_BOOST_AMOUNT = 4
+SPEED_BOOST_NOTICE_DURATION = 180
 
 font_big = pygame.font.SysFont("arial", 48, bold=True)
 font_med = pygame.font.SysFont("arial", 28, bold=True)
@@ -224,13 +227,20 @@ class Game:
         self.score = 0
         self.game_over = False
         self.paused = False
+        self.speed_boost_notice_timer = 0
+        self.speed_boost_triggered = False
 
     def difficulty_speed(self):
-        return self.base_speed + self.score // 300
+        speed = self.base_speed + self.score // 300
+        if self.score >= SPEED_BOOST_SCORE:
+            speed += SPEED_BOOST_AMOUNT
+        return speed
 
     def spawn_enemy(self):
         self.spawn_timer += 1
         interval = max(28, self.spawn_interval - self.score // 40)
+        if self.score >= SPEED_BOOST_SCORE:
+            interval = max(18, interval - 10)
         if self.spawn_timer >= interval:
             self.spawn_timer = 0
             self.enemies.append(Enemy(self.difficulty_speed()))
@@ -248,6 +258,11 @@ class Game:
         self.enemies = [e for e in self.enemies if e.y < HEIGHT + 100]
 
         self.score += 1
+        if self.score >= SPEED_BOOST_SCORE and not self.speed_boost_triggered:
+            self.speed_boost_triggered = True
+            self.speed_boost_notice_timer = SPEED_BOOST_NOTICE_DURATION
+        if self.speed_boost_notice_timer > 0:
+            self.speed_boost_notice_timer -= 1
 
         if not self.player.is_airborne():
             player_rect = self.player.rect()
@@ -275,6 +290,12 @@ class Game:
         surface.blit(score_text, (14, 14))
         speed_text = font_small.render(f"Speed: {self.difficulty_speed()}", True, WHITE)
         surface.blit(speed_text, (14, 48))
+        if self.score >= SPEED_BOOST_SCORE:
+            boost_text = font_small.render("Boost Mode: ON", True, GREEN)
+            surface.blit(boost_text, (14, 72))
+            jump_y = 96
+        else:
+            jump_y = 72
         if self.score < JUMP_UNLOCK_SCORE:
             jump_label = f"Jump unlocks at {JUMP_UNLOCK_SCORE}"
             jump_color = YELLOW
@@ -285,7 +306,7 @@ class Game:
             jump_label = "Jump: WAIT"
             jump_color = YELLOW
         jump_text = font_small.render(jump_label, True, jump_color)
-        surface.blit(jump_text, (14, 72))
+        surface.blit(jump_text, (14, jump_y))
 
     def draw(self, surface):
         self.draw_road(surface)
@@ -293,6 +314,8 @@ class Game:
         for enemy in self.enemies:
             enemy.draw(surface)
         self.draw_hud(surface)
+        if self.speed_boost_notice_timer > 0:
+            self.draw_boost_notice(surface)
 
         if self.paused:
             self.draw_center_text(surface, "PAUSED", "Press P to resume")
@@ -309,6 +332,14 @@ class Game:
 
         sub_surf = font_small.render(subtitle, True, WHITE)
         surface.blit(sub_surf, sub_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 24)))
+
+    def draw_boost_notice(self, surface):
+        pulse = self.speed_boost_notice_timer % 30 < 15
+        color = GREEN if pulse else YELLOW
+        notice = font_big.render("SPEED BOOST!", True, color)
+        surface.blit(notice, notice.get_rect(center=(WIDTH // 2, 145)))
+        sub = font_small.render("Traffic is faster after 1000", True, WHITE)
+        surface.blit(sub, sub.get_rect(center=(WIDTH // 2, 185)))
 
 
 def main():
